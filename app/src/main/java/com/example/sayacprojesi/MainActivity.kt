@@ -1,58 +1,134 @@
 package com.example.sayacprojesi
 
+import android.app.Dialog
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.os.CountDownTimer
 import android.os.Handler
 import android.os.Looper
+import android.view.LayoutInflater
 import android.view.View
+import android.view.Window
+import android.widget.Button
+import androidx.appcompat.app.AlertDialog
+import androidx.recyclerview.widget.LinearLayoutManager
 import kotlinx.android.synthetic.main.activity_main.*
+import kotlinx.android.synthetic.main.custom_dialog.*
+import kotlinx.android.synthetic.main.custom_dialog.view.*
+import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
-    var numara = 0
-    var runnable : Runnable = Runnable {  }
-    var handler = Handler(Looper.myLooper()!!)
+
+    private var timerStarted = false
+    private var time = 0.0
+
+    private lateinit var serviceIntent : Intent
+    private lateinit var flagAdapter : FlagAdapter
+    private var flagList : ArrayList<FlagModel> = arrayListOf()
+
+    private var id : Int = 0
+    private var flagText : String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        // Abstract Class
-/*
-        object : CountDownTimer(30000,1000)
-        {
-            override fun onTick(millisUntilFinished: Long) {
-                textView.text = "Kalan: ${millisUntilFinished/1000}"
-            }
 
-            override fun onFinish() {
-                textView.text = "Kalan: 0"
+        flagAdapter = FlagAdapter(flagList)
+        flag_recycler_view.layoutManager = LinearLayoutManager(this,LinearLayoutManager.VERTICAL,false)
+        flag_recycler_view.adapter = flagAdapter
 
-            }
+        btnStart.setOnClickListener {
+            startFlagTimer()
+        }
+        btnStop.setOnClickListener {
+            stop()
+        }
+        btnReset.setOnClickListener {
+            reset()
+        }
 
-        }.start()
+        serviceIntent = Intent(applicationContext,TimerService::class.java)
+        registerReceiver(updateTime, IntentFilter(TimerService.TIMER_UPDATED))
 
- */
     }
-    fun baslat(view: View)
-    {
-        numara = 0
-        runnable = object : Runnable
-        {
-            override fun run()
-            {
-                numara = numara + 1
-                textView.text = "Sayaç: ${numara}"
-                handler.postDelayed(runnable,1000)
-            }
+    fun startFlagTimer() {
+        if (timerStarted)
+            flag()
+        else
+            start()
+    }
+
+    private fun start() {
+        serviceIntent.putExtra(TimerService.TIME_EXTRA, time)
+        startService(serviceIntent)
+        btnStart.text = "Flag"
+        timerStarted = true
+    }
+
+    private fun flag() {
+        id = id + 1
+        stop()
+        showCustomDialog()
+    }
+
+    private fun showCustomDialog() {
+        val dialogBinding = LayoutInflater.from(this).inflate(R.layout.custom_dialog,null)
+        val alertDialogBuilder = AlertDialog.Builder(this).setView(dialogBinding).setCancelable(false)
+        val dialog = alertDialogBuilder.show()
+
+        dialogBinding.btn_submit.setOnClickListener {
+            dialog.dismiss()
+            flagText = dialogBinding.flag_text.text.toString()
+
+            updateRecyclerView()
+            start()
 
         }
-        handler.post(runnable)
+    }
+
+    private fun updateRecyclerView() {
+        var flagModel = FlagModel(id,flagText,getTimeStringFromDouble(time))
+        flagList.add(flagModel)
+        flagAdapter.notifyDataSetChanged()
+    }
+
+    fun stop() {
+        stopService(serviceIntent)
+        btnStart.text = "Start"
+        timerStarted = false
+    }
+    fun reset(){
+        id = 0
+        flagList.clear()
+        flagAdapter.notifyDataSetChanged()
+        stop()
+        time = 0.0
+        textView.text = getTimeStringFromDouble(time)
+    }
+
+    private val updateTime : BroadcastReceiver = object : BroadcastReceiver(){
+        override fun onReceive(context: Context, intent: Intent) {
+            time = intent.getDoubleExtra(TimerService.TIME_EXTRA,0.0)
+            textView.text = getTimeStringFromDouble(time)
+        }
 
     }
-    fun durdur(view:View)
-    {
-        handler.removeCallbacks(runnable)
-        numara = 0
-        textView.text = "Sayaç: 0"
+
+    private fun getTimeStringFromDouble(time: Double): String {
+        val resultInt = time.roundToInt()
+        val hours = resultInt % 86400 / 3600
+        val minutes = resultInt % 86400 % 3600 / 60
+        val seconds = resultInt % 86400 % 3600 % 60
+
+        return makeTimeString(hours, minutes, seconds)
+
     }
+
+    private fun makeTimeString(hour: Int, min: Int, sec: Int): String  = String.format("%02d:%02d:%02d", hour, min, sec)
+
+
 }
